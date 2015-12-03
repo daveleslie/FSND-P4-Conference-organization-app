@@ -36,6 +36,8 @@ from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import TeeShirtSize
 from models import StringMessage
+from models import Session
+from models import SessionForm
 
 from utils import getUserId
 
@@ -52,6 +54,12 @@ DEFAULTS = {
     "maxAttendees": 0,
     "seatsAvailable": 0,
     "topics": [ "Default", "Topic" ],
+}
+
+SESS_DEFAULTS = {
+    "typeOfSession": "Normal",
+    "highlights": "TBC",
+    "duration": "60",
 }
 
 OPERATORS = {
@@ -74,6 +82,8 @@ CONF_GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     websafeConferenceKey=messages.StringField(1),
 )
+
+
 
 CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
@@ -495,7 +505,7 @@ class ConferenceApi(remote.Service):
 
 # - - - Announcements - - - - - - - - - - - - - - - - - - - -
 
-# TODO 1
+
     @staticmethod
     def _cacheAnnouncement():
         """Create Announcement & assign to memcache; used by
@@ -527,13 +537,116 @@ class ConferenceApi(remote.Service):
                       path='conference/announcement/get',
                       http_method='GET', name='getAnnouncement')
     def getAnnouncement(self, request):
-        """Return Annoucement from memcache."""
-        # TODO 1
+        """Return Announcement from memcache."""
+        #
         # return an existing announcement from Memcache or an empty string.
         announcement = memcache.get(MEMCACHE_ANNOUNCEMENTS_KEY)
         if not announcement:
             announcement = ""
         return StringMessage(data=announcement)
+
+
+# - - - - - - - - -  - - Session Objects ----------------------------
+
+    def _copySessionToForm(self, sess):
+        """Copy relevant fields from Session to SessionForm"""
+        sf = SessionForm()
+        for field in sf.all_fields():
+            if hasattr(sess, field.name):
+                # Convert dates/times to string; only copy other fields
+                if field.name.endswith(('date', 'Time')):
+                    setattr(sf, field.name, str(getattr(sess, field.name)))
+                else:
+                    setattr(sf, field.name, getattr(sess, field.name))
+            elif field.name == 'websafeKey':
+                setattr(sf, field.name, sess.key.urlsafe())
+        sf.check_initialized()
+        return sf
+
+    def _createSessionObject(self, request):
+        """Create or update session object, returning SessionForm/request."""
+        # preload the necessary data items:
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException("Authorization Required")
+        user_id = getUserId(user)
+
+        if not request.name:
+            raise endpoints.BadRequestException("Conference 'name' field "
+                                                "required")
+
+        # get the parent conference from the websafe key submitted:
+        conf = ndb.Key(urlsafe=request.websafeKey).get()
+        if not conf:
+            raise endpoints.NotFoundException('No conference found with key: '
+                                              '%s' %
+                                              request.webSafeConferenceKey)
+        # confirm that user is the owner of the conference:
+        if user_id != conf.organizerUserId:
+            raise endpoints.ForbiddenException("You must be the conference "
+                                               "organizer to add sessions")
+        # Copy SessionForm/ProtoRPC message into dict:
+        data = {field.name: getattr(request, field.name) for field in request.all_fields()}
+
+
+        # Get Conference Key from the parent conference
+        conf_key = ndb.Key(urlsafe=request.websafeKey)
+        # create a new session ID and key based on the parent conference key
+        sess_id = Session.allocate_ids(size=1, parent=conf_key)[0]
+        sess_key = ndb.Key(Session, sess_id, parent=conf_key)
+        # store the session key in the data dict:
+        data['key'] = sess_key
+        del data ['websafeKey']
+        # del data ['webSafeConferenceKey']
+
+        # add default values for missing fields (data model & outbound Message)
+        for df in SESS_DEFAULTS:
+            if data[df] in (None, []):
+                data[df] = SESS_DEFAULTS[df]
+                setattr(request, df, SESS_DEFAULTS[df])
+
+        # convert date from String to Date object
+        if data['date']:
+            data['date'] = datetime.strptime(data['date'][:10], "%Y-%m-%d").date()
+
+        # convert time from String to Time object
+        if data['startTime']:
+            data['startTime'] = datetime.strptime(data['startTime'][:5], "%H:%M")
+
+        # Create Session
+        Session(**data).put()
+
+        return request
+
+
+    @endpoints.method(SessionForm, SessionForm, path='session',
+                      http_method='POST', name='createSession')
+    def createSession(self, request):
+        """Create new Session."""
+        return self._createSessionObject(request)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

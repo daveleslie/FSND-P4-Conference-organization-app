@@ -121,7 +121,7 @@ class ConferenceQueryForms(messages.Message):
     filters = messages.MessageField(ConferenceQueryForm, 1, repeated=True)
 
 
-class Session(ndb.model):
+class Session(ndb.Model):
     """Conference Sessions - Session Object"""
     name            = ndb.StringProperty(required=True)
     speaker         = ndb.StringProperty()
