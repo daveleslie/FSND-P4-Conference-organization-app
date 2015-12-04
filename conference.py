@@ -38,6 +38,7 @@ from models import TeeShirtSize
 from models import StringMessage
 from models import Session
 from models import SessionForm
+from models import SessionForms
 
 from utils import getUserId
 
@@ -84,10 +85,28 @@ CONF_GET_REQUEST = endpoints.ResourceContainer(
 )
 
 
-
 CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
     websafeConferenceKey=messages.StringField(1),
+)
+
+
+SESSION_POST_REQUEST = endpoints.ResourceContainer(
+    SessionForm,
+    websafeKey=messages.StringField(1),
+)
+
+
+SESSION_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeKey=messages.StringField(1),
+    typeOfSession=messages.StringField(2),
+    speaker=messages.StringField(3),
+)
+
+SPEAKER_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    speaker=messages.StringField(1),
 )
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -580,7 +599,7 @@ class ConferenceApi(remote.Service):
         if not conf:
             raise endpoints.NotFoundException('No conference found with key: '
                                               '%s' %
-                                              request.webSafeConferenceKey)
+                                              request.websafeConferenceKey)
         # confirm that user is the owner of the conference:
         if user_id != conf.organizerUserId:
             raise endpoints.ForbiddenException("You must be the conference "
@@ -619,13 +638,57 @@ class ConferenceApi(remote.Service):
         return request
 
 
-    @endpoints.method(SessionForm, SessionForm, path='session',
+    @endpoints.method(SESSION_POST_REQUEST, SessionForm, path='session',
                       http_method='POST', name='createSession')
     def createSession(self, request):
         """Create new Session."""
-        return self._createSessionObject(request)
+        session = self._createSessionObject(request)
+
+        return self._copySessionToForm(session)
 
 
+    @endpoints.method(SESSION_GET_REQUEST, SessionForms,
+                      path='/conference/{websafeKey}/session',
+                      http_method='GET', name='getConferenceSessions')
+    def getConferenceSessions(self, request):
+        """Given a conference, return all sessions"""
+        # wsk = request.websafeConferenceKey
+        # get the conference object from the request:
+        # c_key = ndb.Key(urlsafe=wsk).get()
+        # if not c_key:
+        #    raise endpoints.NotFoundException('No conference with key: %s' %request.websafeConferenceKey)
+
+        # Get the sessions for the conference
+        sessions = Session.query(ancestor=ndb.Key(urlsafe=request.websafeKey))
+
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+
+
+    @endpoints.method(SESSION_GET_REQUEST, SessionForms, path='conference/{websafeKey}/session/{typeOfSession}',
+                      http_method='GET', name='getConferenceSessionsByType')
+    def getConferenceSessionsByType(self, request):
+        """Given a conference, return all sessions of a specified type"""
+        sessions = Session.query(ancestor=ndb.Key(urlsafe=request.websafeKey))
+        sessions = sessions.filter(Session.typeOfSession.upper() == request.typeOfSession.upper())
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+
+
+    @endpoints.method(SPEAKER_GET_REQUEST, SessionForms, path='speaker/{speaker}',
+                      http_method='GET', name='getSessionsBySpeaker')
+    def getSessionsBySpeaker(self, request):
+        """Given a speaker, return all sessions, across all conferences,
+        given by this speaker"""
+        sessions = []
+        if getattr(request, 'speaker'):
+            sessions = Session.query()
+            sessions = sessions.filter(Session.speaker.upper() == request.speaker.upper())
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
 
 
 
