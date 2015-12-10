@@ -1,4 +1,4 @@
-App Engine application for the Udacity training course.
+# Conference Organization Application for Udacity Fullstack Web Developer nanodegree program
 
 ## Products
 - [App Engine][1]
