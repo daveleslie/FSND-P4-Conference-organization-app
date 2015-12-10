@@ -849,7 +849,7 @@ class ConferenceApi(remote.Service):
         sessions = []
         if getattr(request, 'speaker'):
             sessions = Session.query()
-            sessions = sessions.filter(Session.speaker.upper() == request.speaker.upper())
+            sessions = sessions.filter(Session.speaker == request.speaker)
         return SessionForms(
             items=[self._copySessionToForm(sess) for sess in sessions]
         )
