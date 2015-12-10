@@ -23,6 +23,20 @@ App Engine application for the Udacity training course.
 1. (Optional) Generate your client library(ies) with [the endpoints tool][6].
 1. Deploy your application.
 
+## Task 1 - Design Choices
+1. Sessions can be created as entities within datastore by making use of the Session Class in models.py
+2. Speakers are simply a Stringfield attribute to the Session object
+
+## Task 3 - Additonal Queries
+1. Query for all sessions accross all conferences, this query is designed for potential delegates to view the actual content available in existing conferences and make their decisions on which conferences to attend thereon.
+2. An additional wishlist query was implemented allowing users to view all the sessions in their wishlist accross all conferences, and not only within a specific conference.
+
+## Task 3 - Query Problem
+1. The problem with this query is that it would need to filter the query using more than one inequality filter which is not allowed in Google Datastore.
+2. The Solution to this problem implemented in this application was to do the first filter for 'typeOfSession' using the datastore query, and then the additional filtering implemented through the actual code of the application by iterating over the query result and storing all items within the query object that match the target criteria in a new object to be returned by the endpoints method.
+3. The endpoints method implemented to demonstrate this functionality is the 'getSpecialSessions' method in the conference API class.
+
+
 
 [1]: https://developers.google.com/appengine
 [2]: http://python.org
